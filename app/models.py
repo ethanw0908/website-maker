@@ -51,6 +51,7 @@ class Business(Base):
     contacts: Mapped[list["Contact"]] = relationship(back_populates="business", cascade="all, delete-orphan")
     audits: Mapped[list["WebsiteAudit"]] = relationship(back_populates="business", cascade="all, delete-orphan")
     jobs: Mapped[list["GenerationJob"]] = relationship(back_populates="business", cascade="all, delete-orphan")
+    note: Mapped["LeadNote | None"] = relationship(back_populates="business", cascade="all, delete-orphan", uselist=False)
 
 
 class Contact(Base):
@@ -81,7 +82,7 @@ class WebsiteAudit(Base):
     has_service_information: Mapped[bool] = mapped_column(Boolean, default=False)
     outdated_visual_signals: Mapped[bool] = mapped_column(Boolean, default=False)
     broken_links: Mapped[list] = mapped_column(JSON, default=list)
-    metadata: Mapped[dict] = mapped_column(JSON, default=dict)
+    audit_metadata: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
     screenshot_paths: Mapped[list] = mapped_column(JSON, default=list)
     completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
@@ -130,9 +131,48 @@ class EmailDraft(Base):
     recipient: Mapped[str] = mapped_column(String(320))
     subject: Mapped[str] = mapped_column(String(255))
     body: Mapped[str] = mapped_column(Text)
-    gmail_draft_id: Mapped[str | None] = mapped_column(String(255))
     status: Mapped[str] = mapped_column(String(50), default="awaiting_review")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class EmailEvent(Base):
+    __tablename__ = "email_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email_draft_id: Mapped[int] = mapped_column(ForeignKey("email_drafts.id", ondelete="CASCADE"), index=True)
+    event_type: Mapped[str] = mapped_column(String(50), index=True)
+    detail: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class LeadNote(Base):
+    __tablename__ = "lead_notes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    business_id: Mapped[int] = mapped_column(ForeignKey("businesses.id", ondelete="CASCADE"), unique=True, index=True)
+    content: Mapped[str] = mapped_column(Text, default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    business: Mapped[Business] = relationship(back_populates="note")
+
+
+class SmtpAccount(Base):
+    __tablename__ = "smtp_accounts"
+
+    id: Mapped[int] = mapped_column(primary_key=True, default=1)
+    host: Mapped[str] = mapped_column(String(255))
+    port: Mapped[int] = mapped_column(Integer, default=587)
+    username: Mapped[str | None] = mapped_column(String(320))
+    encrypted_password: Mapped[str | None] = mapped_column(Text)
+    from_email: Mapped[str] = mapped_column(String(320))
+    from_name: Mapped[str | None] = mapped_column(String(160))
+    sender_business: Mapped[str | None] = mapped_column(String(160))
+    postal_address: Mapped[str | None] = mapped_column(String(500))
+    unsubscribe_email: Mapped[str | None] = mapped_column(String(320))
+    use_tls: Mapped[bool] = mapped_column(Boolean, default=True)
+    use_ssl: Mapped[bool] = mapped_column(Boolean, default=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
 
 class SuppressionEntry(Base):

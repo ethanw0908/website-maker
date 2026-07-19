@@ -21,7 +21,7 @@ def build_research_brief(business: Business, audit: WebsiteAudit | None) -> dict
             "mobile_responsive": audit.mobile_responsive if audit else False,
             "has_call_to_action": audit.has_call_to_action if audit else False,
             "has_service_information": audit.has_service_information if audit else False,
-            "metadata": audit.metadata if audit else {},
+            "metadata": audit.audit_metadata if audit else {},
         },
         "requirements": {
             "pages": ["Home", "About", "Services", "Contact"],
@@ -30,8 +30,15 @@ def build_research_brief(business: Business, audit: WebsiteAudit | None) -> dict
             "preview_only": True,
             "noindex": True,
             "do_not_invent": [
-                "awards", "testimonials", "employee names", "certifications", "prices",
-                "years in business", "guarantees", "licence numbers", "service areas"
+                "awards",
+                "testimonials",
+                "employee names",
+                "certifications",
+                "prices",
+                "years in business",
+                "guarantees",
+                "licence numbers",
+                "service areas",
             ],
         },
     }

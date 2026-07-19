@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 
 
 class DiscoveryRequest(BaseModel):
@@ -15,12 +15,16 @@ class LeadDecision(BaseModel):
     reason: str | None = Field(default=None, max_length=500)
 
 
+class LeadNoteRequest(BaseModel):
+    content: str = Field(default="", max_length=5_000)
+
+
 class EmailDraftRequest(BaseModel):
-    recipient: str
-    sender_name: str = Field(min_length=2, max_length=120)
-    sender_business: str = Field(min_length=2, max_length=160)
-    sender_address: str = Field(min_length=5, max_length=300)
-    unsubscribe_email: str
+    recipient: EmailStr
+    sender_name: str | None = Field(default=None, min_length=2, max_length=120)
+    sender_business: str | None = Field(default=None, min_length=2, max_length=160)
+    sender_address: str | None = Field(default=None, min_length=5, max_length=500)
+    unsubscribe_email: EmailStr | None = None
 
 
 class PauseRequest(BaseModel):
@@ -31,3 +35,24 @@ class PauseRequest(BaseModel):
 class PublishRequest(BaseModel):
     repository_visibility: str = Field(default="private", pattern="^(private|public)$")
     deploy_to_vercel: bool = True
+
+
+class SmtpSettingsRequest(BaseModel):
+    host: str = Field(min_length=2, max_length=255)
+    port: int = Field(default=587, ge=1, le=65535)
+    username: str | None = Field(default=None, max_length=320)
+    password: str | None = Field(default=None, max_length=1_000)
+    from_email: EmailStr
+    from_name: str | None = Field(default=None, max_length=160)
+    sender_business: str | None = Field(default=None, max_length=160)
+    postal_address: str | None = Field(default=None, max_length=500)
+    unsubscribe_email: EmailStr | None = None
+    use_tls: bool = True
+    use_ssl: bool = False
+    enabled: bool = True
+
+    @model_validator(mode="after")
+    def validate_transport(self) -> "SmtpSettingsRequest":
+        if self.use_tls and self.use_ssl:
+            raise ValueError("Choose STARTTLS or SSL, not both")
+        return self

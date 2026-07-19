@@ -15,12 +15,19 @@ class CodexGenerator:
     def generate(self, brief: dict, workspace: Path) -> dict:
         if not shutil.which("codex"):
             raise RuntimeError("Codex CLI is not installed in the controller environment")
+
+        auth_file = self.settings.codex_home / "auth.json"
+        if not auth_file.exists():
+            raise RuntimeError(
+                "Codex OAuth is not connected. Run `docker compose run --rm worker codex --login`, "
+                "complete Sign in with ChatGPT, then restart the worker."
+            )
+
         workspace.mkdir(parents=True, exist_ok=True)
         prompt_template = Path("prompts/site_generator.md").read_text(encoding="utf-8")
         prompt = prompt_template.replace("{{BRIEF_JSON}}", json.dumps(brief, indent=2, ensure_ascii=False))
         env = os.environ.copy()
-        if self.settings.openai_api_key:
-            env["OPENAI_API_KEY"] = self.settings.openai_api_key
+        env.pop("OPENAI_API_KEY", None)
 
         last_error = None
         for revision in range(self.settings.max_codex_revisions + 1):
