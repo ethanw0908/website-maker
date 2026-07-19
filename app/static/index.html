@@ -18,10 +18,7 @@
 
   <main>
     <section class="summary">
-      <div>
-        <p class="eyebrow">Saved in PostgreSQL</p>
-        <h1>Business pipeline</h1>
-      </div>
+      <div><p class="eyebrow">Saved in PostgreSQL</p><h1>Business pipeline</h1></div>
       <span id="health" class="status">Checking</span>
     </section>
 
@@ -38,9 +35,7 @@
 
     <section class="tab-panel active" data-panel="leads">
       <section class="panel discovery">
-        <div class="section-heading">
-          <div><p class="eyebrow">Discovery</p><h2>Find businesses</h2></div>
-        </div>
+        <div class="section-heading"><div><p class="eyebrow">Discovery</p><h2>Find businesses</h2></div></div>
         <form id="discover-form" class="discovery-grid">
           <label>Categories<input name="categories" value="plumber, HVAC contractor" required></label>
           <label>Cities<input name="cities" value="Vancouver BC" required></label>
@@ -60,58 +55,42 @@
           </div>
         </div>
         <div class="table-wrap">
-          <table class="sheet">
-            <thead><tr><th>Company</th><th>City</th><th>Rating</th><th>Website</th><th>Email</th><th>Score</th><th>Status</th><th>Saved notes</th><th>Actions</th></tr></thead>
-            <tbody id="lead-rows"><tr><td colspan="9" class="empty">No leads loaded.</td></tr></tbody>
+          <table class="sheet leads-sheet">
+            <thead>
+              <tr>
+                <th class="select-column"><input id="select-all-leads" type="checkbox" aria-label="Select all visible leads"></th>
+                <th>Company</th><th>City</th><th>Rating</th><th>Website</th><th>Email</th><th>Score</th><th>Status</th>
+                <th>GitHub repo</th><th>Vercel</th><th>Saved notes</th><th>Details</th>
+              </tr>
+            </thead>
+            <tbody id="lead-rows"><tr><td colspan="12" class="empty">No leads loaded.</td></tr></tbody>
           </table>
         </div>
       </section>
     </section>
 
     <section class="tab-panel" data-panel="jobs">
-      <section class="panel">
-        <div class="sheet-toolbar"><div><p class="eyebrow">Codex OAuth</p><h2>Generation jobs</h2></div></div>
-        <div class="table-wrap">
-          <table class="sheet">
-            <thead><tr><th>ID</th><th>Company</th><th>Status</th><th>Revisions</th><th>Updated</th><th>Error</th><th>Actions</th></tr></thead>
-            <tbody id="job-rows"><tr><td colspan="7" class="empty">No jobs loaded.</td></tr></tbody>
-          </table>
-        </div>
+      <section class="panel"><div class="sheet-toolbar"><div><p class="eyebrow">Codex OAuth</p><h2>Generation jobs</h2></div></div>
+        <div class="table-wrap"><table class="sheet"><thead><tr><th>ID</th><th>Company</th><th>Status</th><th>Revisions</th><th>Updated</th><th>Error</th><th>Actions</th></tr></thead><tbody id="job-rows"></tbody></table></div>
       </section>
     </section>
 
     <section class="tab-panel" data-panel="deployments">
-      <section class="panel">
-        <div class="sheet-toolbar"><div><p class="eyebrow">GitHub and Vercel</p><h2>Deployments</h2></div></div>
-        <div class="table-wrap">
-          <table class="sheet">
-            <thead><tr><th>ID</th><th>Company</th><th>Status</th><th>GitHub</th><th>Preview</th><th>Commit</th><th>Created</th><th>Actions</th></tr></thead>
-            <tbody id="deployment-rows"><tr><td colspan="8" class="empty">No deployments.</td></tr></tbody>
-          </table>
-        </div>
+      <section class="panel"><div class="sheet-toolbar"><div><p class="eyebrow">GitHub and Vercel</p><h2>Deployments</h2></div></div>
+        <div class="table-wrap"><table class="sheet"><thead><tr><th>ID</th><th>Company</th><th>Status</th><th>GitHub</th><th>Preview</th><th>Commit</th><th>Created</th><th>Actions</th></tr></thead><tbody id="deployment-rows"></tbody></table></div>
       </section>
     </section>
 
     <section class="tab-panel" data-panel="drafts">
-      <section class="panel">
-        <div class="sheet-toolbar"><div><p class="eyebrow">Manual approval only</p><h2>Email drafts</h2></div></div>
-        <div class="table-wrap">
-          <table class="sheet">
-            <thead><tr><th>ID</th><th>Company</th><th>Recipient</th><th>Subject</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
-            <tbody id="draft-rows"><tr><td colspan="7" class="empty">No drafts loaded.</td></tr></tbody>
-          </table>
-        </div>
+      <section class="panel"><div class="sheet-toolbar"><div><p class="eyebrow">Manual approval only</p><h2>Email drafts</h2></div></div>
+        <div class="table-wrap"><table class="sheet"><thead><tr><th>ID</th><th>Company</th><th>Recipient</th><th>Subject</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead><tbody id="draft-rows"></tbody></table></div>
       </section>
     </section>
 
     <section class="tab-panel" data-panel="settings">
       <section class="integration-grid" id="integration-grid"></section>
-
       <section class="panel settings-panel">
-        <div class="section-heading">
-          <div><p class="eyebrow">Your own mailbox</p><h2>SMTP connection</h2></div>
-          <span id="smtp-state" class="status">Not configured</span>
-        </div>
+        <div class="section-heading"><div><p class="eyebrow">Your own mailbox</p><h2>SMTP connection</h2></div><span id="smtp-state" class="status">Not configured</span></div>
         <form id="smtp-form" class="settings-grid">
           <label>SMTP host<input name="host" placeholder="smtp.gmail.com" required></label>
           <label>Port<input name="port" type="number" min="1" max="65535" value="587" required></label>
@@ -125,38 +104,23 @@
           <label class="check"><input name="use_tls" type="checkbox" checked> STARTTLS</label>
           <label class="check"><input name="use_ssl" type="checkbox"> SSL/TLS</label>
           <label class="check"><input name="enabled" type="checkbox" checked> Enabled</label>
-          <div class="form-actions">
-            <button type="submit" class="primary">Save SMTP</button>
-            <button type="button" id="test-smtp">Test connection</button>
-          </div>
+          <div class="form-actions"><button type="submit" class="primary">Save SMTP</button><button type="button" id="test-smtp">Test connection</button></div>
         </form>
-        <p class="helper">The password is encrypted before it is stored in PostgreSQL. Sending still requires clicking Send on an individual saved draft.</p>
       </section>
-
-      <section class="panel setup-panel">
-        <div class="section-heading"><div><p class="eyebrow">One-time setup</p><h2>Codex sign-in</h2></div></div>
-        <pre><code>docker compose run --rm worker codex --login
-docker compose restart worker</code></pre>
-        <p class="helper">The OAuth credentials remain in the persistent <code>codex_auth</code> Docker volume.</p>
-      </section>
+      <section class="panel setup-panel"><div class="section-heading"><div><p class="eyebrow">One-time setup</p><h2>Codex sign-in</h2></div></div><pre><code>docker compose run --rm worker codex --login
+docker compose restart worker</code></pre></section>
     </section>
   </main>
 
-  <dialog id="details">
-    <button class="close" aria-label="Close">×</button>
-    <div id="details-body"></div>
-  </dialog>
+  <aside id="bulk-actions" class="bulk-actions" aria-live="polite">
+    <span><strong id="selected-count">0</strong> selected</span>
+    <button id="delete-selected" class="danger">Delete</button>
+    <button id="sold-selected">Sold</button>
+    <button id="make-website-selected" class="primary">Make website</button>
+  </aside>
 
-  <dialog id="draft-dialog">
-    <button class="close" aria-label="Close">×</button>
-    <h2>Create email draft</h2>
-    <form id="draft-form" class="dialog-form">
-      <input name="deployment_id" type="hidden">
-      <label>Recipient email<input name="recipient" type="email" required></label>
-      <button type="submit" class="primary">Create saved draft</button>
-    </form>
-  </dialog>
-
+  <dialog id="details"><button class="close" aria-label="Close">×</button><div id="details-body"></div></dialog>
+  <dialog id="draft-dialog"><button class="close" aria-label="Close">×</button><h2>Create email draft</h2><form id="draft-form" class="dialog-form"><input name="deployment_id" type="hidden"><label>Recipient email<input name="recipient" type="email" required></label><button type="submit" class="primary">Create saved draft</button></form></dialog>
   <script src="/static/app.js" defer></script>
 </body>
 </html>
