@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en-CA">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LocalSite Agent</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div><strong>LocalSite</strong><span>Control centre</span></div>
+    <div class="top-actions">
+      <input id="admin-key" type="password" placeholder="Administrator key" autocomplete="current-password">
+      <button id="refresh">Refresh</button>
+      <button id="pause" class="danger">Pause</button>
+    </div>
+  </header>
+  <main>
+    <section class="panel discovery">
+      <div class="section-heading"><div><p class="eyebrow">Discovery</p><h1>Qualified local leads</h1></div><span id="health" class="status">Checking</span></div>
+      <form id="discover-form">
+        <label>Categories<input name="categories" value="plumber, HVAC contractor" required></label>
+        <label>Cities<input name="cities" value="Vancouver BC" required></label>
+        <label>Minimum rating<input name="rating" type="number" step="0.1" min="0" max="5" value="4.2"></label>
+        <label>Minimum reviews<input name="reviews" type="number" min="0" value="25"></label>
+        <label>Daily maximum<input name="maximum" type="number" min="1" max="200" value="10"></label>
+        <button type="submit" class="primary">Discover</button>
+      </form>
+      <p id="notice" class="notice" aria-live="polite"></p>
+    </section>
+
+    <section class="metrics" id="metrics"></section>
+
+    <section class="panel">
+      <div class="section-heading"><div><p class="eyebrow">Pipeline</p><h2>Leads</h2></div><select id="status-filter"><option value="">All statuses</option></select></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Company</th><th>Location</th><th>Rating</th><th>Score</th><th>Status</th><th>Contact</th><th></th></tr></thead>
+          <tbody id="lead-rows"><tr><td colspan="7" class="empty">No leads loaded.</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <dialog id="details"><button class="close" aria-label="Close">×</button><div id="details-body"></div></dialog>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
