@@ -1,10 +1,12 @@
 from pathlib import Path
+from typing import Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import func, or_, select
+from pydantic import BaseModel, Field
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -37,7 +39,7 @@ from app.services.smtp import encrypt_secret, send_draft, test_smtp
 from app.tasks import audit_business, generate_website
 
 settings = get_settings()
-app = FastAPI(title=settings.app_name, version="0.2.0")
+app = FastAPI(title=settings.app_name, version="0.3.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -46,6 +48,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+
+class BulkLeadActionRequest(BaseModel):
+    ids: list[int] = Field(min_length=1, max_length=200)
+    action: Literal["make_website", "delete", "sold"]
 
 
 def require_admin(x_admin_key: str | None = Header(default=None)) -> None:
@@ -115,9 +122,12 @@ def health() -> dict:
 @app.get("/api/state", dependencies=[Depends(require_admin)])
 def state(db: Session = Depends(get_db)) -> dict:
     system = db.get(SystemState, 1)
-    counts = {}
-    for status in PipelineStatus:
-        counts[status.value] = len(db.scalars(select(Business).where(Business.pipeline_status == status.value)).all())
+    rows = db.execute(
+        select(Business.pipeline_status, func.count(Business.id)).group_by(Business.pipeline_status)
+    ).all()
+    counts = {status.value: 0 for status in PipelineStatus}
+    counts.update({status: count for status, count in rows})
+    counts.setdefault("client", 0)
     return {
         "paused": bool(system and system.paused),
         "pause_reason": system.pause_reason if system else None,
@@ -212,25 +222,44 @@ def list_leads(status: str | None = None, db: Session = Depends(get_db)) -> list
     if status:
         statement = statement.where(Business.pipeline_status == status)
     businesses = db.scalars(statement.limit(500)).all()
-    return [{
-        "id": b.id,
-        "name": b.name,
-        "category": b.category,
-        "city": b.city,
-        "address": b.address,
-        "phone": b.phone,
-        "rating": b.rating,
-        "review_count": b.review_count,
-        "website_url": b.website_url,
-        "google_maps_url": b.google_maps_url,
-        "score": b.qualification_score,
-        "score_reasons": b.score_reasons,
-        "status": b.pipeline_status,
-        "approved": b.approved_by_user,
-        "contact": b.contacts[0].email if b.contacts else None,
-        "note": b.note.content if b.note else "",
-        "updated_at": b.updated_at.isoformat() if b.updated_at else None,
-    } for b in businesses]
+    business_ids = [business.id for business in businesses]
+
+    latest_deployments: dict[int, Deployment] = {}
+    if business_ids:
+        deployments = db.scalars(
+            select(Deployment)
+            .where(Deployment.business_id.in_(business_ids))
+            .order_by(Deployment.created_at.desc(), Deployment.id.desc())
+        ).all()
+        for deployment in deployments:
+            latest_deployments.setdefault(deployment.business_id, deployment)
+
+    result = []
+    for business in businesses:
+        deployment = latest_deployments.get(business.id)
+        result.append({
+            "id": business.id,
+            "name": business.name,
+            "category": business.category,
+            "city": business.city,
+            "address": business.address,
+            "phone": business.phone,
+            "rating": business.rating,
+            "review_count": business.review_count,
+            "website_url": business.website_url,
+            "google_maps_url": business.google_maps_url,
+            "score": business.qualification_score,
+            "score_reasons": business.score_reasons,
+            "status": business.pipeline_status,
+            "approved": business.approved_by_user,
+            "contact": business.contacts[0].email if business.contacts else None,
+            "note": business.note.content if business.note else "",
+            "github_repository": deployment.github_repository if deployment else None,
+            "vercel_preview_url": deployment.preview_url if deployment else None,
+            "deployment_status": deployment.status if deployment else None,
+            "updated_at": business.updated_at.isoformat() if business.updated_at else None,
+        })
+    return result
 
 
 @app.put("/api/leads/{business_id}/note", dependencies=[Depends(require_admin)])
@@ -242,10 +271,73 @@ def save_lead_note(business_id: int, payload: LeadNoteRequest, db: Session = Dep
     if note:
         note.content = payload.content
     else:
-        note = LeadNote(business_id=business_id, content=payload.content)
-        db.add(note)
+        db.add(LeadNote(business_id=business_id, content=payload.content))
     db.commit()
     return {"business_id": business_id, "note": payload.content}
+
+
+@app.post("/api/leads/bulk-action", dependencies=[Depends(require_admin)])
+def bulk_lead_action(payload: BulkLeadActionRequest, db: Session = Depends(get_db)) -> dict:
+    ids = list(dict.fromkeys(payload.ids))
+    businesses = db.scalars(select(Business).where(Business.id.in_(ids))).all()
+    found_ids = {business.id for business in businesses}
+    missing_ids = [business_id for business_id in ids if business_id not in found_ids]
+
+    if not businesses:
+        raise HTTPException(404, "No selected leads were found")
+
+    if payload.action == "delete":
+        draft_ids = db.scalars(select(EmailDraft.id).where(EmailDraft.business_id.in_(found_ids))).all()
+        if draft_ids:
+            db.execute(delete(EmailEvent).where(EmailEvent.email_draft_id.in_(draft_ids)))
+        db.execute(delete(EmailDraft).where(EmailDraft.business_id.in_(found_ids)))
+        db.execute(delete(Deployment).where(Deployment.business_id.in_(found_ids)))
+        for business in businesses:
+            db.delete(business)
+        db.commit()
+        return {"action": payload.action, "deleted": len(businesses), "missing_ids": missing_ids}
+
+    ensure_not_paused(db)
+
+    if payload.action == "sold":
+        for business in businesses:
+            business.approved_by_user = True
+            business.pipeline_status = "client"
+        db.commit()
+        return {"action": payload.action, "updated": len(businesses), "missing_ids": missing_ids}
+
+    queued_jobs: list[GenerationJob] = []
+    skipped: list[dict] = []
+    for business in businesses:
+        active_job = db.scalar(
+            select(GenerationJob)
+            .where(
+                GenerationJob.business_id == business.id,
+                GenerationJob.status.in_(["queued", "running"]),
+            )
+            .order_by(GenerationJob.created_at.desc())
+        )
+        if active_job:
+            skipped.append({"business_id": business.id, "reason": f"Job {active_job.id} is already {active_job.status}"})
+            continue
+        business.approved_by_user = True
+        business.pipeline_status = PipelineStatus.APPROVED.value
+        job = GenerationJob(business_id=business.id, status="queued")
+        db.add(job)
+        queued_jobs.append(job)
+
+    db.commit()
+    for job in queued_jobs:
+        db.refresh(job)
+        generate_website.delay(job.id)
+
+    return {
+        "action": payload.action,
+        "queued": len(queued_jobs),
+        "job_ids": [job.id for job in queued_jobs],
+        "skipped": skipped,
+        "missing_ids": missing_ids,
+    }
 
 
 @app.post("/api/leads/{business_id}/approve", dependencies=[Depends(require_admin)])
@@ -460,12 +552,7 @@ def get_smtp_settings(db: Session = Depends(get_db)) -> dict:
 def save_smtp_settings(payload: SmtpSettingsRequest, db: Session = Depends(get_db)) -> dict:
     account = db.get(SmtpAccount, 1)
     if not account:
-        account = SmtpAccount(
-            id=1,
-            host=payload.host,
-            port=payload.port,
-            from_email=str(payload.from_email),
-        )
+        account = SmtpAccount(id=1, host=payload.host, port=payload.port, from_email=str(payload.from_email))
         db.add(account)
 
     account.host = payload.host
