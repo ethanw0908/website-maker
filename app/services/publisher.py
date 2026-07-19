@@ -29,7 +29,11 @@ class Publisher:
         repo = self._create_repository(repo_name, visibility)
         self._push_repository(workspace, repo["clone_url"])
         commit_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=workspace, text=True).strip()
-        result = {"github_repository": repo["html_url"], "commit_sha": commit_sha}
+        result = {
+            "github_repository": repo["html_url"],
+            "github_owner": repo["owner"]["login"],
+            "commit_sha": commit_sha,
+        }
 
         if deploy:
             if not self.settings.allow_vercel_deployment:
@@ -46,21 +50,39 @@ class Publisher:
 
     def _create_repository(self, name: str, visibility: str) -> dict:
         headers = self._headers()
-        payload = {"name": name, "private": visibility == "private", "description": "Private LocalSite Agent concept preview"}
+        payload = {
+            "name": name,
+            "private": visibility == "private",
+            "description": "Private LocalSite Agent concept preview",
+        }
         with httpx.Client(timeout=30) as client:
             identity = client.get("https://api.github.com/user", headers=headers)
             identity.raise_for_status()
-            owner = identity.json()["login"]
+            authenticated_owner = identity.json()["login"]
+            owner = (self.settings.github_organization or authenticated_owner).strip()
 
-            response = client.post("https://api.github.com/user/repos", headers=headers, json=payload)
+            if self.settings.github_organization:
+                endpoint = f"https://api.github.com/orgs/{owner}/repos"
+            else:
+                endpoint = "https://api.github.com/user/repos"
+
+            response = client.post(endpoint, headers=headers, json=payload)
             if response.status_code == 422:
                 lookup = client.get(f"https://api.github.com/repos/{owner}/{name}", headers=headers)
                 lookup.raise_for_status()
                 return lookup.json()
+            if response.status_code in {403, 404} and self.settings.github_organization:
+                raise RuntimeError(
+                    f"GitHub could not create a repository in organization '{owner}'. Confirm the token owner is an "
+                    "organization member and the token has repository Administration write permission."
+                )
             response.raise_for_status()
             return response.json()
 
     def _push_repository(self, workspace: Path, clone_url: str) -> None:
+        git_dir = workspace / ".git"
+        if git_dir.exists():
+            shutil.rmtree(git_dir)
         subprocess.run(["git", "init", "-b", "main"], cwd=workspace, check=True)
         subprocess.run(["git", "config", "user.name", "LocalSite Agent"], cwd=workspace, check=True)
         subprocess.run(["git", "config", "user.email", "localsite-agent@users.noreply.github.com"], cwd=workspace, check=True)
