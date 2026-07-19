@@ -48,11 +48,18 @@ def audit_business(business_id: int) -> dict:
 
         screenshot_dir = settings.workspace_root / f"business-{business_id}" / "audit"
         data = asyncio.run(WebsiteAuditor(screenshot_dir).audit(business.website_url))
-        audit = WebsiteAudit(business_id=business.id, **{key: data[key] for key in (
-            "reachable", "https_enabled", "mobile_responsive", "has_call_to_action",
-            "has_service_information", "outdated_visual_signals", "broken_links",
-            "metadata", "screenshot_paths"
-        )})
+        audit = WebsiteAudit(
+            business_id=business.id,
+            reachable=data["reachable"],
+            https_enabled=data["https_enabled"],
+            mobile_responsive=data["mobile_responsive"],
+            has_call_to_action=data["has_call_to_action"],
+            has_service_information=data["has_service_information"],
+            outdated_visual_signals=data["outdated_visual_signals"],
+            broken_links=data["broken_links"],
+            audit_metadata=data["metadata"],
+            screenshot_paths=data["screenshot_paths"],
+        )
         db.add(audit)
         contact = data.get("contact") or {}
         if contact.get("email") or contact.get("contact_form_url"):

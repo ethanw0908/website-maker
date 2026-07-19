@@ -2,12 +2,14 @@ services:
   api:
     build: .
     env_file: .env
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    restart: unless-stopped
     ports:
       - "8000:8000"
     volumes:
       - .:/app
       - workspaces:/app/workspaces
+      - codex_auth:/root/.codex:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -17,10 +19,12 @@ services:
   worker:
     build: .
     env_file: .env
-    command: celery -A app.tasks.celery_app worker --loglevel=INFO --concurrency=2
+    command: celery -A app.tasks.celery_app worker --loglevel=INFO --concurrency=1
+    restart: unless-stopped
     volumes:
       - .:/app
       - workspaces:/app/workspaces
+      - codex_auth:/root/.codex
     depends_on:
       postgres:
         condition: service_healthy
@@ -31,6 +35,7 @@ services:
     build: .
     env_file: .env
     command: celery -A app.tasks.celery_app beat --loglevel=INFO
+    restart: unless-stopped
     volumes:
       - .:/app
     depends_on:
@@ -38,6 +43,7 @@ services:
 
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_DB: localsite
       POSTGRES_USER: localsite
@@ -52,6 +58,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
@@ -65,3 +72,4 @@ volumes:
   postgres_data:
   redis_data:
   workspaces:
+  codex_auth:

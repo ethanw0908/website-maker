@@ -11,19 +11,13 @@ class Settings(BaseSettings):
     app_name: str = "LocalSite Agent"
     app_env: str = "development"
     admin_api_key: str | None = None
+    app_secret_key: str = "change-me-with-openssl-rand-hex-32"
     database_url: str = "sqlite:///./localsite.db"
     redis_url: str = "redis://localhost:6379/0"
 
     google_places_api_key: str | None = None
-    openai_api_key: str | None = None
     github_token: str | None = None
-    github_owner: str | None = None
     vercel_token: str | None = None
-    vercel_team_id: str | None = None
-
-    gmail_oauth_credentials: str | None = None
-    google_service_account_file: str | None = None
-    google_sheet_id: str | None = None
 
     max_businesses_per_day: int = Field(default=20, ge=1, le=500)
     qualification_threshold: int = Field(default=35, ge=-100, le=100)
@@ -32,6 +26,7 @@ class Settings(BaseSettings):
     allow_vercel_deployment: bool = False
     control_centre_origins: str = "http://localhost:8000,http://127.0.0.1:8000"
     workspace_root: Path = Path("workspaces")
+    codex_home: Path = Path.home() / ".codex"
 
     @property
     def cors_origins(self) -> list[str]:

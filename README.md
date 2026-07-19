@@ -1,70 +1,163 @@
 # LocalSite Agent
 
-LocalSite Agent is an approval-gated business-development controller that discovers local companies, audits public website and contact information, scores leads, creates verified website concepts with Codex CLI, runs guardrails, publishes reviewed concepts to GitHub and Vercel, and prepares outreach drafts.
+LocalSite Agent is an approval-gated business-development controller for a Raspberry Pi or other Linux server. It discovers local businesses, audits public websites, scores leads, generates reviewed concept sites with Codex CLI, publishes approved concepts through GitHub and Vercel, and prepares outreach emails.
 
-The default workflow is deliberately human-controlled:
+All pipeline information is stored in PostgreSQL and shown in a spreadsheet-style control centre. Google Sheets and Gmail are not required.
+
+## Authentication model
+
+- **GitHub:** one `GITHUB_TOKEN`. The account owner is detected automatically from the token.
+- **Codex:** Sign in with ChatGPT through Codex CLI OAuth. No manually supplied OpenAI API key is required.
+- **Vercel:** one personal `VERCEL_TOKEN`. No team ID is required.
+- **Email:** configure any SMTP mailbox in the control centre. The SMTP password is encrypted before being stored in PostgreSQL.
+
+The workflow remains human-controlled:
 
 ```text
-Discovered → Audited → Awaiting approval → Generated → QA passed → Publish approval → Drafted → Awaiting review
+Discovered → Audited → Awaiting approval → Generated → QA passed
+→ Publish approval → Drafted → Manual send approval → Sent
 ```
 
-There is no automatic email-send endpoint. Repository creation and Vercel deployment are disabled until the corresponding environment flags are explicitly enabled.
+There is no unrestricted automatic-send mode.
 
-## Included in this MVP
+## Raspberry Pi / Debian start
 
-- FastAPI control API and GitHub-style control centre
-- PostgreSQL system of record with Redis/Celery jobs
-- Google Places Text Search discovery and Place ID deduplication
-- Playwright website audit, screenshots, public business-email extraction, contact-form discovery, and MX checks
-- Configurable lead scoring and manual approval gate
-- Structured company research brief
-- Isolated Codex CLI generation with bounded QA revisions
-- Generated-site checks for required files, unindexed previews, placeholders, generic claims, and contact actions
-- Private-first GitHub repository creation and optional Vercel preview deployment
-- Personalized outreach draft generation with sender identification and opt-out language
-- Emergency pause control, daily discovery cap, API authentication, tests, and CI
-
-## Start locally
+Use a 64-bit operating system. Install Docker and Git, then:
 
 ```bash
+git clone https://github.com/ethanw0908/website-maker.git
+cd website-maker
 cp .env.example .env
-# Set ADMIN_API_KEY and the integrations you plan to use.
-docker compose up --build
 ```
 
-Open `http://localhost:8000`, enter the same administrator key from `.env`, and use the discovery form.
+Generate secure application secrets:
 
-## Safety switches
+```bash
+ADMIN_KEY=$(openssl rand -hex 32)
+APP_SECRET=$(openssl rand -hex 32)
+sed -i "s/^ADMIN_API_KEY=.*/ADMIN_API_KEY=$ADMIN_KEY/" .env
+sed -i "s/^APP_SECRET_KEY=.*/APP_SECRET_KEY=$APP_SECRET/" .env
+```
 
-Keep these disabled while configuring and testing:
+Add your Google Places, GitHub, and Vercel tokens to `.env`:
+
+```env
+GOOGLE_PLACES_API_KEY=
+GITHUB_TOKEN=
+VERCEL_TOKEN=
+```
+
+Keep publication disabled during setup:
 
 ```env
 ALLOW_REPOSITORY_CREATION=false
 ALLOW_VERCEL_DEPLOYMENT=false
 ```
 
-Enable them only after reviewing the generated briefs, QA results, repository ownership, Vercel scope, and jurisdiction-specific outreach requirements.
+Build and start:
 
-## Required credentials
+```bash
+docker compose up --build -d
+docker compose ps
+curl http://localhost:8000/api/health
+```
 
-- `GOOGLE_PLACES_API_KEY` for discovery
-- Codex CLI authentication or `OPENAI_API_KEY` for generation
-- `GITHUB_TOKEN` and `GITHUB_OWNER` for private concept repositories
-- `VERCEL_TOKEN` and optional `VERCEL_TEAM_ID` for preview deployment
+Open:
 
-Secrets belong in `.env` or a secret manager and must never be committed. Generated concept sites must remain unindexed, must not pretend to be official, and must not accept bookings, payments, or customer information.
+```text
+http://YOUR_PI_IP:8000
+```
 
-## API flow
+Enter the `ADMIN_API_KEY` from `.env`.
 
-1. `POST /api/discover`
-2. Wait for the audit worker and review `GET /api/leads`
-3. `POST /api/leads/{id}/approve`
-4. Wait for Codex and QA
-5. `POST /api/jobs/{id}/publish`
-6. `POST /api/deployments/{id}/email-draft`
+## Connect Codex with ChatGPT OAuth
 
-All protected routes require `X-Admin-Key` when `ADMIN_API_KEY` is configured.
+The Compose stack includes a persistent `codex_auth` volume. Run:
 
-## Production hardening still recommended
+```bash
+docker compose run --rm worker codex --login
+docker compose restart worker
+```
 
-Before public or high-volume use, add Alembic migrations, encrypted OAuth-token storage, Google Sheets synchronization, Gmail draft creation, deeper accessibility/performance tooling, screenshot review in the UI, robust legal configuration by jurisdiction, observability, backups, and rate-limit accounting.
+Complete the Sign in with ChatGPT flow. The control centre Settings tab will show Codex as connected after the OAuth credentials are present.
+
+You can also use:
+
+```bash
+./scripts/codex-login.sh
+```
+
+No `OPENAI_API_KEY` setting is used by the generator.
+
+## Connect your email with SMTP
+
+Open **Settings → SMTP connection** in the control centre and enter:
+
+- SMTP host and port
+- Username and password
+- From email and display name
+- Business name
+- Physical postal address
+- Unsubscribe email
+- STARTTLS or SSL/TLS
+
+Click **Save SMTP**, then **Test connection**. The test authenticates and sends no message.
+
+Generated messages remain saved drafts. Sending requires opening the Email drafts tab and clicking **Send** for a specific recipient. Sent and failed events are recorded in PostgreSQL.
+
+For Gmail or Microsoft accounts, use the provider's SMTP settings and an app password when the provider requires one. The application does not use the Gmail API.
+
+## Saved spreadsheet-style dashboard
+
+The control centre contains:
+
+- Leads, scores, contacts, statuses, and editable saved notes
+- Codex generation jobs and errors
+- GitHub repositories and Vercel previews
+- Email drafts and send status
+- Integration status and SMTP settings
+
+PostgreSQL is the system of record. Docker volumes preserve the database, Redis state, generated workspaces, and Codex OAuth credentials across container restarts.
+
+## Enable publication
+
+After generation and QA work correctly:
+
+```env
+ALLOW_REPOSITORY_CREATION=true
+```
+
+Restart:
+
+```bash
+docker compose up -d --force-recreate
+```
+
+After GitHub publication succeeds, optionally enable personal Vercel deployment:
+
+```env
+ALLOW_VERCEL_DEPLOYMENT=true
+```
+
+No `GITHUB_OWNER` or `VERCEL_TEAM_ID` setting is needed.
+
+## Useful commands
+
+```bash
+docker compose logs -f
+docker compose logs -f worker
+docker compose restart
+docker compose down
+git pull origin main
+docker compose up --build -d
+```
+
+`docker compose down` does not delete saved data. Do not run `docker compose down -v` unless you intentionally want to remove the PostgreSQL, Redis, workspace, and Codex OAuth volumes.
+
+## Security
+
+- Do not commit `.env`.
+- Use a unique `APP_SECRET_KEY`; changing it prevents existing SMTP passwords from being decrypted.
+- Do not expose port `8000` directly to the public internet without HTTPS and access controls.
+- Keep GitHub and Vercel publication switches disabled until previews are reviewed.
+- Respect suppression requests and the commercial-email rules that apply to each recipient.
