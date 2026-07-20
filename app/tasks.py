@@ -6,6 +6,7 @@ from app.db import SessionLocal
 from app.models import Business, Contact, GenerationJob, PipelineStatus, WebsiteAudit
 from app.services.auditor import WebsiteAuditor
 from app.services.codex import CodexGenerator, GenerationFailure
+from app.services.publication import publish_generation_job, save_publication_failure
 from app.services.research import build_research_brief
 from app.services.scoring import score_lead
 
@@ -94,11 +95,7 @@ def audit_business(business_id: int) -> dict:
         db.close()
 
 
-@celery_app.task(
-    name="app.tasks.generate_website",
-    acks_late=True,
-    reject_on_worker_lost=True,
-)
+@celery_app.task(name="app.tasks.generate_website", acks_late=True, reject_on_worker_lost=True)
 def generate_website(job_id: int) -> dict:
     db: Session = SessionLocal()
     try:
@@ -106,6 +103,12 @@ def generate_website(job_id: int) -> dict:
         if not job:
             raise ValueError("Generation job not found")
         if job.status == "passed":
+            if settings.auto_publish_after_qa:
+                try:
+                    publication = publish_generation_job(db, job, deploy_to_vercel=True)
+                    return {"job_id": job.id, "status": job.status, "workspace": job.workspace_path, "publication": publication}
+                except Exception as exc:
+                    save_publication_failure(db, job, exc)
             return {"job_id": job.id, "status": job.status, "workspace": job.workspace_path}
 
         business = db.get(Business, job.business_id)
@@ -129,6 +132,13 @@ def generate_website(job_id: int) -> dict:
             job.error = None
             business.pipeline_status = PipelineStatus.READY_TO_PUBLISH.value
             db.commit()
+
+            if settings.auto_publish_after_qa:
+                try:
+                    result["publication"] = publish_generation_job(db, job, deploy_to_vercel=True)
+                except Exception as exc:
+                    save_publication_failure(db, job, exc)
+                    result["publication"] = {"status": "failed", "error": str(exc)}
             return result
         except GenerationFailure as exc:
             job.status = "failed"

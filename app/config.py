@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     max_businesses_per_day: int = Field(default=20, ge=1, le=500)
     qualification_threshold: int = Field(default=35, ge=-100, le=100)
     max_codex_revisions: int = Field(default=2, ge=0, le=5)
+    auto_publish_after_qa: bool = True
     allow_repository_creation: bool = False
     allow_vercel_deployment: bool = False
     control_centre_origins: str = "http://localhost:8000,http://127.0.0.1:8000"
