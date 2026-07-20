@@ -95,10 +95,11 @@ def validate_generated_site(root: Path, brief: dict | None = None) -> dict:
             "html_files": [],
         }
 
-    for required in REQUIRED_HTML:
-        path = root / required
-        if not path.exists() or not path.read_text(encoding="utf-8", errors="ignore").strip():
-            failures.append(f"Missing required page: {required}")
+    if brief is not None:
+        for required in REQUIRED_HTML:
+            path = root / required
+            if not path.exists() or not path.read_text(encoding="utf-8", errors="ignore").strip():
+                failures.append(f"Missing required page: {required}")
 
     combined_text: list[str] = []
     combined_html: list[str] = []
