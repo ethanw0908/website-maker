@@ -5,12 +5,22 @@ from app.config import get_settings
 from app.db import SessionLocal
 from app.models import Business, Contact, GenerationJob, PipelineStatus, WebsiteAudit
 from app.services.auditor import WebsiteAuditor
-from app.services.codex import CodexGenerator
+from app.services.codex import CodexGenerator, GenerationFailure
 from app.services.research import build_research_brief
 from app.services.scoring import score_lead
 
 settings = get_settings()
 celery_app = Celery("localsite", broker=settings.redis_url, backend=settings.redis_url)
+celery_app.conf.update(
+    task_routes={
+        "app.tasks.generate_website": {"queue": "generation"},
+        "app.tasks.audit_business": {"queue": "celery"},
+    },
+    worker_prefetch_multiplier=1,
+    task_acks_late=True,
+    task_reject_on_worker_lost=True,
+    broker_transport_options={"visibility_timeout": 7_200},
+)
 celery_app.conf.beat_schedule = {
     "maintenance-heartbeat": {
         "task": "app.tasks.maintenance_heartbeat",
@@ -84,13 +94,20 @@ def audit_business(business_id: int) -> dict:
         db.close()
 
 
-@celery_app.task(name="app.tasks.generate_website")
+@celery_app.task(
+    name="app.tasks.generate_website",
+    acks_late=True,
+    reject_on_worker_lost=True,
+)
 def generate_website(job_id: int) -> dict:
     db: Session = SessionLocal()
     try:
         job = db.get(GenerationJob, job_id)
         if not job:
             raise ValueError("Generation job not found")
+        if job.status == "passed":
+            return {"job_id": job.id, "status": job.status, "workspace": job.workspace_path}
+
         business = db.get(Business, job.business_id)
         if not business or not business.approved_by_user:
             raise PermissionError("Lead must be manually approved before generation")
@@ -99,6 +116,8 @@ def generate_website(job_id: int) -> dict:
         workspace = settings.workspace_root / f"business-{business.id}" / f"generation-{job.id}"
         job.status = "running"
         job.brief = brief
+        job.workspace_path = str(workspace)
+        job.error = None
         business.pipeline_status = PipelineStatus.GENERATING.value
         db.commit()
         try:
@@ -107,9 +126,17 @@ def generate_website(job_id: int) -> dict:
             job.workspace_path = result["workspace"]
             job.revision_count = result["revision_count"]
             job.qa_results = result["qa"]
+            job.error = None
             business.pipeline_status = PipelineStatus.READY_TO_PUBLISH.value
             db.commit()
             return result
+        except GenerationFailure as exc:
+            job.status = "failed"
+            job.qa_results = exc.qa
+            job.error = str(exc)
+            business.pipeline_status = PipelineStatus.QA_FAILED.value
+            db.commit()
+            raise
         except Exception as exc:
             job.status = "failed"
             job.error = str(exc)

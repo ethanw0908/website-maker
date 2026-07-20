@@ -8,11 +8,13 @@ Design requirements:
 - Produce responsive, polished layouts at 390 px, 768 px, 1280 px, and 1440 px widths.
 - Use accessible colour contrast, visible focus states, keyboard-operable navigation, labelled forms, and reduced-motion support.
 - Keep the text concise and factual.
-- Use real contact links only when they are present in the brief.
+- Use `tel:` only when a verified phone number is present. Use `mailto:` only when a verified public email is present.
+- If neither a phone nor public email is verified, show the verified address, website, or Google Maps information instead; do not invent a contact action.
 - Do not add a functioning lead form; a form may be a non-submitting visual concept clearly marked as disabled.
-- Every HTML page must include `<meta name="robots" content="noindex, nofollow">`.
+- Every HTML page must include robots metadata containing both `noindex` and `nofollow`. Attribute order and quote style do not matter.
 - Include JSON-LD LocalBusiness data containing only verified fields.
 - Avoid excessive gradients, glassmorphism, floating cards, fake dashboards, animated counters, generic AI wording, and decorative clutter.
+- Use the phrase “Unofficial concept preview” for any disclaimer. Do not claim endorsement or ownership by the business.
 
 Required files:
 index.html
@@ -26,7 +28,7 @@ sitemap.xml
 README.md
 vercel.json
 
-The README must state that this is an unofficial, unsolicited concept preview. The site must not claim to be official or accept bookings, payments, or customer data.
+The README must state that this is an unofficial, unsolicited concept preview. The site must not accept bookings, payments, or customer data.
 
 Company brief:
 {{BRIEF_JSON}}

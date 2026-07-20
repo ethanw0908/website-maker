@@ -17,6 +17,7 @@ class Settings(BaseSettings):
 
     google_places_api_key: str | None = None
     github_token: str | None = None
+    github_organization: str | None = None
     vercel_token: str | None = None
 
     max_businesses_per_day: int = Field(default=20, ge=1, le=500)
