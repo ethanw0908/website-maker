@@ -15,7 +15,7 @@ PREFERRED_PREFIXES = ("info@", "service@", "hello@", "contact@", "office@", "sal
 @dataclass
 class ContactCandidate:
     email: str | None
-    source_url: str | None
+    email_source_url: str | None
     source_type: str | None
     contact_form_url: str | None
     confidence: float
