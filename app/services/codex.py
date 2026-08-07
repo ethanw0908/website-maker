@@ -22,7 +22,15 @@ class CodexGenerator:
         env = os.environ.copy()
         env.pop("OPENAI_API_KEY", None)
         process = subprocess.run(
-            ["codex", "exec", "--ephemeral", "--full-auto", prompt],
+            [
+                "codex",
+                "exec",
+                "--ephemeral",
+                "--full-auto",
+                "-c",
+                "sandbox_workspace_write.network_access=true",
+                prompt,
+            ],
             cwd=workspace,
             env=env,
             text=True,
