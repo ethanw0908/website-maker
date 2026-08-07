@@ -1,11 +1,10 @@
-import json
 import os
 import shutil
 import subprocess
 from pathlib import Path
 
 from app.config import get_settings
-from app.services.guardrails import prepare_generated_site, validate_generated_site
+from app.services.agent_pipeline import AgentPipeline
 
 
 class GenerationFailure(RuntimeError):
@@ -19,6 +18,31 @@ class CodexGenerator:
     def __init__(self) -> None:
         self.settings = get_settings()
 
+    def _run_codex(self, prompt: str, workspace: Path) -> str:
+        env = os.environ.copy()
+        env.pop("OPENAI_API_KEY", None)
+        process = subprocess.run(
+            [
+                "codex",
+                "exec",
+                "--ephemeral",
+                "--full-auto",
+                "-c",
+                "sandbox_workspace_write.network_access=true",
+                prompt,
+            ],
+            cwd=workspace,
+            env=env,
+            text=True,
+            capture_output=True,
+            timeout=1_200,
+        )
+        log = (process.stdout + "\n" + process.stderr)[-16_000:]
+        if process.returncode != 0:
+            detail = process.stderr[-8_000:] or process.stdout[-8_000:] or "Codex exited unsuccessfully"
+            raise RuntimeError(detail)
+        return log
+
     def generate(self, brief: dict, workspace: Path) -> dict:
         if not shutil.which("codex"):
             raise RuntimeError("Codex CLI is not installed in the controller environment")
@@ -30,49 +54,15 @@ class CodexGenerator:
                 "complete Sign in with ChatGPT, then restart the worker."
             )
 
-        workspace.mkdir(parents=True, exist_ok=True)
-        prompt_template = Path("prompts/site_generator.md").read_text(encoding="utf-8")
-        prompt = prompt_template.replace("{{BRIEF_JSON}}", json.dumps(brief, indent=2, ensure_ascii=False))
-        env = os.environ.copy()
-        env.pop("OPENAI_API_KEY", None)
+        try:
+            result = AgentPipeline().run(brief, workspace, self._run_codex)
+        except Exception as exc:
+            raise GenerationFailure(f"Agent pipeline failed: {exc}") from exc
 
-        last_error = ""
-        last_log = ""
-        last_qa: dict = {}
-        for revision in range(self.settings.max_codex_revisions + 1):
-            revision_prompt = prompt
-            if revision:
-                revision_prompt += (
-                    "\n\nThe previous attempt failed automated QA. Inspect the current files and correct every "
-                    "failure below. Preserve good design work and do not invent facts:\n- "
-                    + "\n- ".join(last_qa.get("failures") or [last_error])
-                )
-
-            process = subprocess.run(
-                ["codex", "exec", "--ephemeral", "--full-auto", revision_prompt],
-                cwd=workspace,
-                env=env,
-                text=True,
-                capture_output=True,
-                timeout=1_200,
+        if not result.get("qa", {}).get("passed"):
+            raise GenerationFailure(
+                "Generation failed quality review: " + (result.get("error") or "unknown QA failure"),
+                qa=result.get("qa") or {},
+                log=result.get("generator_log") or "",
             )
-            last_log = (process.stdout + "\n" + process.stderr)[-12_000:]
-            if process.returncode != 0:
-                last_error = process.stderr[-6_000:] or process.stdout[-6_000:] or "Codex exited unsuccessfully"
-                continue
-
-            repairs = prepare_generated_site(workspace, brief)
-            last_qa = validate_generated_site(workspace, brief)
-            last_qa["repairs"] = repairs
-            last_qa["revision"] = revision
-            if last_qa["passed"]:
-                return {
-                    "workspace": str(workspace),
-                    "revision_count": revision,
-                    "qa": last_qa,
-                    "generator_log": last_log,
-                }
-            last_error = "; ".join(last_qa["failures"])
-
-        message = f"Generation failed after {self.settings.max_codex_revisions + 1} attempt(s): {last_error}"
-        raise GenerationFailure(message, qa=last_qa, log=last_log)
+        return result
