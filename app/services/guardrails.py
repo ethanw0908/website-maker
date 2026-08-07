@@ -1,10 +1,11 @@
 import json
 import re
 from pathlib import Path
+from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup
 
-REQUIRED_HTML = ("index.html", "about.html", "services.html", "contact.html")
+REQUIRED_HTML = ("index.html",)
 REQUIRED_SUPPORT = ("robots.txt", "sitemap.xml", "README.md", "vercel.json")
 PROHIBITED_PATTERNS = {
     "placeholder text": re.compile(r"\blorem ipsum\b", re.IGNORECASE),
@@ -50,7 +51,7 @@ def _ensure_robots_meta(path: Path) -> None:
 
 
 def prepare_generated_site(root: Path, brief: dict | None = None) -> list[str]:
-    """Repair deterministic preview boilerplate before QA without inventing business facts."""
+    """Repair deterministic preview boilerplate without dictating the creative structure."""
     root.mkdir(parents=True, exist_ok=True)
     repairs: list[str] = []
 
@@ -65,7 +66,7 @@ def prepare_generated_site(root: Path, brief: dict | None = None) -> list[str]:
         "vercel.json": json.dumps({"cleanUrls": True, "trailingSlash": False}, indent=2) + "\n",
         "README.md": (
             "# Unofficial concept preview\n\n"
-            "This repository is an unsolicited, private website concept. It is not operated by the business, "
+            "This repository is an unsolicited website concept. It is not operated by the business, "
             "does not accept bookings, payments, or customer information, and must remain unindexed until approved.\n"
         ),
         "sitemap.xml": (
@@ -82,6 +83,25 @@ def prepare_generated_site(root: Path, brief: dict | None = None) -> list[str]:
     return repairs
 
 
+def _local_reference_exists(root: Path, html_path: Path, value: str) -> bool:
+    value = value.strip()
+    if not value or value.startswith(("#", "mailto:", "tel:", "javascript:", "data:")):
+        return True
+    parsed = urlparse(value)
+    if parsed.scheme in {"http", "https"} or parsed.netloc:
+        return True
+    path_only = parsed.path
+    if not path_only or path_only == "/":
+        target = root / "index.html"
+    elif path_only.startswith("/"):
+        target = root / path_only.lstrip("/")
+    else:
+        target = html_path.parent / path_only
+    if target.is_dir():
+        target = target / "index.html"
+    return target.exists()
+
+
 def validate_generated_site(root: Path, brief: dict | None = None) -> dict:
     failures: list[str] = []
     warnings: list[str] = []
@@ -95,11 +115,10 @@ def validate_generated_site(root: Path, brief: dict | None = None) -> dict:
             "html_files": [],
         }
 
-    if brief is not None:
-        for required in REQUIRED_HTML:
-            path = root / required
-            if not path.exists() or not path.read_text(encoding="utf-8", errors="ignore").strip():
-                failures.append(f"Missing required page: {required}")
+    for required in REQUIRED_HTML:
+        path = root / required
+        if not path.exists() or not path.read_text(encoding="utf-8", errors="ignore").strip():
+            failures.append(f"Missing required entry point: {required}")
 
     combined_text: list[str] = []
     combined_html: list[str] = []
@@ -123,6 +142,12 @@ def validate_generated_site(root: Path, brief: dict | None = None) -> dict:
             if action and action not in {"#", "/#"} and not action.lower().startswith("javascript:"):
                 warnings.append(f"{path.name} contains a form action; confirm it cannot collect customer data")
 
+        for tag, attribute in (("a", "href"), ("img", "src"), ("script", "src"), ("link", "href")):
+            for element in soup.find_all(tag):
+                value = str(element.get(attribute) or "")
+                if value and not _local_reference_exists(root, path, value):
+                    failures.append(f"{path.name} references missing local resource: {value}")
+
     visible_text = "\n".join(combined_text)
     lowered_html = "\n".join(combined_html)
     for label, pattern in PROHIBITED_PATTERNS.items():
@@ -145,7 +170,7 @@ def validate_generated_site(root: Path, brief: dict | None = None) -> dict:
 
     return {
         "passed": not failures,
-        "failures": failures,
-        "warnings": warnings,
+        "failures": list(dict.fromkeys(failures)),
+        "warnings": list(dict.fromkeys(warnings)),
         "html_files": [path.name for path in html_paths],
     }
