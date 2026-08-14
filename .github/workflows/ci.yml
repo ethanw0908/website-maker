@@ -23,4 +23,4 @@ jobs:
       - run: docker build -t website-maker-ci .
       - run: docker run --rm website-maker-ci bwrap --version
       - name: Verify bubblewrap can create a user namespace in Docker
-        run: docker run --rm website-maker-ci bwrap --unshare-user --ro-bind / / --dev /dev --proc /proc /bin/true
+        run: docker run --rm --security-opt seccomp=unconfined website-maker-ci bwrap --unshare-user --ro-bind / / --dev /dev --proc /proc /bin/true
