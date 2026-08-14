@@ -12,6 +12,14 @@ The user's generation prompt is:
 
 The research and creative direction are inputs, not a template. Execute the design with the level of craft expected from a strong human web designer.
 
+CRITICAL OUTPUT CONTRACT:
+- You are already running inside the publishable website root directory.
+- You MUST create the actual website files using filesystem write tools. Do not only explain, plan, or print code in your response.
+- Create `index.html` DIRECTLY in the current working directory before finishing.
+- Do NOT put the finished site inside `site/`, `public/`, `dist/`, `build/`, `src/`, or any other child directory.
+- CSS, JavaScript, assets, and additional HTML pages may be organised in normal child folders, but the publishable entry point must be `./index.html`.
+- Before returning, run a filesystem check such as `test -s index.html` or equivalent and inspect the files you wrote.
+
 Implementation rules:
 - Start from the current blank site workspace; do not reuse a generic site template.
 - Build a static, Vercel-deployable site using semantic HTML5, modern CSS, and small vanilla JavaScript where useful.
@@ -32,4 +40,4 @@ Implementation rules:
 - Prefer a few strong visual decisions over many generic components.
 - The site should look materially different from other local-business sites even if only the business name were removed.
 
-Before finishing, inspect the complete site in source, verify paths, and make a final polish pass. Do not merely satisfy the checklist.
+Before finishing, inspect the complete site in source, verify paths, confirm `./index.html` exists and is non-empty, and make a final polish pass. Do not merely satisfy the checklist.
