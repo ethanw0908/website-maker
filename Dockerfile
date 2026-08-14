@@ -5,7 +5,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl git nodejs npm ca-certificates \
+    bubblewrap curl git nodejs npm ca-certificates \
+    && bwrap --version \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

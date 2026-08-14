@@ -7,6 +7,24 @@ from app.config import get_settings
 from app.services.agent_pipeline import AgentPipeline
 
 
+CODEX_ENV_ALLOWLIST = {
+    "PATH",
+    "HOME",
+    "USER",
+    "SHELL",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "TERM",
+    "TMPDIR",
+    "TZ",
+    "SSL_CERT_FILE",
+    "SSL_CERT_DIR",
+    "CODEX_HOME",
+    "NO_COLOR",
+}
+
+
 class GenerationFailure(RuntimeError):
     def __init__(self, message: str, *, qa: dict | None = None, log: str | None = None) -> None:
         super().__init__(message)
@@ -18,9 +36,14 @@ class CodexGenerator:
     def __init__(self) -> None:
         self.settings = get_settings()
 
+    @staticmethod
+    def _codex_environment() -> dict[str, str]:
+        """Pass only non-secret process settings into the autonomous Codex child."""
+        env = {key: value for key, value in os.environ.items() if key in CODEX_ENV_ALLOWLIST}
+        env.setdefault("HOME", str(Path.home()))
+        return env
+
     def _run_codex(self, prompt: str, workspace: Path) -> str:
-        env = os.environ.copy()
-        env.pop("OPENAI_API_KEY", None)
         process = subprocess.run(
             [
                 "codex",
@@ -35,7 +58,7 @@ class CodexGenerator:
                 prompt,
             ],
             cwd=workspace,
-            env=env,
+            env=self._codex_environment(),
             text=True,
             capture_output=True,
             timeout=1_200,
