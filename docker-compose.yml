@@ -23,6 +23,12 @@ services:
     env_file: .env
     command: celery -A app.tasks.celery_app worker -Q generation --loglevel=INFO --concurrency=1 --prefetch-multiplier=1
     restart: unless-stopped
+    # Codex's Linux workspace-write sandbox uses bubblewrap, which must create
+    # an inner user namespace. Docker's default seccomp profile blocks the
+    # namespace syscall path, so relax seccomp only for this isolated worker.
+    # Codex itself still runs with --sandbox workspace-write.
+    security_opt:
+      - seccomp=unconfined
     volumes:
       - .:/app
       - workspaces:/app/workspaces
