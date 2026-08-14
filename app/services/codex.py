@@ -24,9 +24,12 @@ class CodexGenerator:
         process = subprocess.run(
             [
                 "codex",
+                "-a",
+                "never",
                 "exec",
                 "--ephemeral",
-                "--full-auto",
+                "--sandbox",
+                "workspace-write",
                 "-c",
                 "sandbox_workspace_write.network_access=true",
                 prompt,
